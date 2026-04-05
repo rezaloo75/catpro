@@ -12,7 +12,7 @@ function generateKongctlYaml(iface: CatalogInterface, gl: GatewayLink): string {
   const plugins = gl.objects.filter(o => o.type === 'Plugin' || o.type === 'AI Plugin')
   const topics = gl.objects.filter(o => o.type === 'Topic')
   const consumerGroups = gl.objects.filter(o => o.type === 'Consumer Group')
-  const modelConnections = gl.objects.filter(o => o.type === 'Model Connection')
+  // modelConnections removed — AI gateway now uses Service/Route/Plugin format
 
   const tags = iface.tags.slice(0, 3)
   const tagsStr = `[${tags.join(', ')}]`
@@ -45,7 +45,7 @@ function generateKongctlYaml(iface: CatalogInterface, gl: GatewayLink): string {
       }
     }
   } else if (gl.gatewayProductType === 'ai') {
-    // AI gateway config
+    // AI gateway config — Service / Route / Plugin format
     lines.push('services:')
     for (const svc of services) {
       lines.push(`  - name: ${svc.name}`)
@@ -57,36 +57,49 @@ function generateKongctlYaml(iface: CatalogInterface, gl: GatewayLink): string {
       lines.push(`    write_timeout: 30000`)
       lines.push(`    retries: 2`)
       lines.push(`    tags: ${tagsStr}`)
-      if (modelConnections.length > 0) {
+      if (plugins.length > 0) {
         lines.push('    plugins:')
-        lines.push('      - name: ai-proxy')
-        lines.push('        enabled: true')
-        lines.push('        config:')
-        lines.push(`          route_type: llm/v1/chat`)
-        lines.push('          auth:')
-        lines.push(`            header_name: Authorization`)
-        lines.push(`            header_value: '{vault://ai-credentials/${modelConnections[0].name}}'`)
-        lines.push('          model:')
-        lines.push(`            provider: ${iface.llmProvider || 'openai'}`)
-        lines.push(`            name: ${modelConnections[0].name}`)
-        lines.push(`        tags: ${tagsStr}`)
         for (const plg of plugins) {
-          lines.push(`      - name: ${plg.name}`)
+          // Plugin name encodes config: "ai-proxy · openai / gpt-4o" or "ai-mcp-proxy · passthrough-listener"
+          const [baseName, detail] = plg.name.split(' · ')
+          lines.push(`      - name: ${baseName}`)
           lines.push(`        enabled: true`)
           lines.push(`        config:`)
-          lines.push(`          allow_patterns: ["*"]`)
-          lines.push(`          deny_patterns: []`)
+          if (baseName === 'ai-proxy' && detail) {
+            const [provider, model] = detail.split(' / ')
+            lines.push(`          route_type: llm/v1/chat`)
+            lines.push(`          auth:`)
+            lines.push(`            header_name: Authorization`)
+            lines.push(`            header_value: '{vault://ai-credentials/${provider}}'`)
+            lines.push(`          model:`)
+            lines.push(`            provider: ${provider}`)
+            lines.push(`            name: ${model}`)
+          } else if (baseName === 'ai-mcp-proxy' && detail) {
+            if (detail === 'passthrough-listener') {
+              lines.push(`          listener_mode: passthrough`)
+              lines.push(`          upstream: '{upstream-mcp-server-url}'`)
+            } else if (detail === 'conversion-listener') {
+              lines.push(`          listener_mode: conversion`)
+            } else {
+              lines.push(`          listener_mode: ${detail}`)
+            }
+          } else {
+            lines.push(`          enabled: true`)
+          }
           lines.push(`        tags: ${tagsStr}`)
         }
       }
       if (routes.length > 0) {
         lines.push('    routes:')
         for (const rt of routes) {
-          lines.push(`      - name: ${rt.name}`)
+          // Route names include HTTP method prefix: "POST /ai/summarize" → strip it
+          const routePath = rt.name.replace(/^(GET|POST|PUT|PATCH|DELETE)\s+/, '')
+          const routeName = routePath.replace(/^\//, '').replace(/[/*\s]/g, '-').replace(/-+/g, '-')
+          lines.push(`      - name: ${routeName}`)
           lines.push(`        methods: [POST]`)
-          lines.push(`        paths: [/${rt.name}]`)
+          lines.push(`        paths: ['${routePath}']`)
           lines.push(`        protocols: [https]`)
-          lines.push(`        strip_path: true`)
+          lines.push(`        strip_path: false`)
           lines.push(`        tags: ${tagsStr}`)
         }
       }

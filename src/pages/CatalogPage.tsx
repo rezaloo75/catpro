@@ -5,14 +5,16 @@ import { SummaryTiles } from '../components/SummaryTiles'
 import { InterfaceTable } from '../components/InterfaceTable'
 import { InterfaceCard } from '../components/InterfaceCard'
 import { NewRestApiWizard } from '../components/NewRestApiWizard'
+import { NewMcpWizard } from '../components/NewMcpWizard'
+import { NewLlmApiWizard } from '../components/NewLlmApiWizard'
 import { useMode, useInterfaces } from '../contexts/ModeContext'
 
 const interfaceTypes = [
-  { type: 'REST API', icon: Radio },
-  { type: 'Event API', icon: Layers },
-  { type: 'LLM API', icon: Sparkles },
-  { type: 'MCP Server', icon: Waypoints },
-  { type: 'Generic API', icon: Puzzle },
+  { type: 'REST API', icon: Radio, implemented: true },
+  { type: 'Event API', icon: Layers, implemented: false },
+  { type: 'LLM API', icon: Sparkles, implemented: true },
+  { type: 'MCP Server', icon: Waypoints, implemented: true },
+  { type: 'Generic API', icon: Puzzle, implemented: false },
 ]
 
 function NewInterfaceButton() {
@@ -70,20 +72,34 @@ function NewInterfaceButton() {
             <div className="px-3 py-2 border-b border-kong-border">
               <span className="text-[10px] font-semibold text-kong-text-muted uppercase tracking-wide">Create new interface</span>
             </div>
-            {interfaceTypes.map(({ type, icon: Icon }) => (
-              <button
-                key={type}
-                onClick={() => handleSelect(type)}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-kong-text hover:bg-white/[0.04] transition-colors"
-              >
-                <Icon size={14} strokeWidth={1.5} className="text-kong-text-secondary" />
-                <span>{type}</span>
-              </button>
+            {interfaceTypes.map(({ type, icon: Icon, implemented }) => (
+              <div key={type} className="relative group/item">
+                <button
+                  onClick={() => implemented && handleSelect(type)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] transition-colors ${
+                    implemented
+                      ? 'text-kong-text hover:bg-white/[0.04] cursor-pointer'
+                      : 'text-kong-text-muted cursor-not-allowed'
+                  }`}
+                >
+                  <Icon size={14} strokeWidth={1.5} className={implemented ? 'text-kong-text-secondary' : 'text-kong-text-muted/50'} />
+                  <span>{type}</span>
+                </button>
+                {!implemented && (
+                  <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover/item:block z-50">
+                    <div className="bg-[#1a1f27] border border-kong-border rounded px-2 py-1 shadow-lg whitespace-nowrap">
+                      <span className="text-[10px] text-kong-text-muted">Not yet implemented in prototype</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
       </div>
       {wizard === 'REST API' && <NewRestApiWizard onClose={() => setWizard(null)} />}
+      {wizard === 'MCP Server' && <NewMcpWizard onClose={() => setWizard(null)} />}
+      {wizard === 'LLM API' && <NewLlmApiWizard onClose={() => setWizard(null)} />}
     </>
   )
 }
@@ -145,102 +161,23 @@ export function CatalogPage() {
       </div>
 
       {/* Results */}
-      {viewMode === 'table' ? (
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3" style={{ height: 'calc(100vh - 280px)' }}>
+          <img
+            src="/kong-logomark.png"
+            alt=""
+            className="w-36 h-auto opacity-[0.06] select-none pointer-events-none"
+            draggable={false}
+          />
+          <p className="text-[13px] text-kong-text-secondary">No interfaces found.</p>
+        </div>
+      ) : viewMode === 'table' ? (
         <InterfaceTable items={filtered} sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(iface => (
             <InterfaceCard key={iface.id} iface={iface} />
           ))}
-          {filtered.length === 0 && (
-            <div className="col-span-full flex flex-col items-center justify-center py-16 gap-4">
-              <svg width="180" height="220" viewBox="0 0 180 220" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* ── ground shadow ── */}
-                <ellipse cx="90" cy="212" rx="52" ry="7" fill="#000" opacity="0.08"/>
-
-                {/* ── legs (behind body) ── */}
-                <ellipse cx="57" cy="188" rx="26" ry="15" fill="#1c1c1c" transform="rotate(-25 57 188)"/>
-                <ellipse cx="123" cy="188" rx="26" ry="15" fill="#1c1c1c" transform="rotate(25 123 188)"/>
-                {/* feet */}
-                <ellipse cx="42" cy="200" rx="20" ry="11" fill="#151515"/>
-                <ellipse cx="138" cy="200" rx="20" ry="11" fill="#151515"/>
-                {/* toe bumps left */}
-                <circle cx="33" cy="196" r="5" fill="#111"/>
-                <circle cx="40" cy="193" r="5" fill="#111"/>
-                <circle cx="48" cy="192" r="5" fill="#111"/>
-                {/* toe bumps right */}
-                <circle cx="147" cy="196" r="5" fill="#111"/>
-                <circle cx="140" cy="193" r="5" fill="#111"/>
-                <circle cx="132" cy="192" r="5" fill="#111"/>
-
-                {/* ── body ── */}
-                <ellipse cx="90" cy="168" rx="38" ry="44" fill="#212121"/>
-                {/* belly highlight */}
-                <ellipse cx="90" cy="174" rx="24" ry="28" fill="#383838"/>
-
-                {/* ── left arm raised to face ── */}
-                <path d="M 62,152 Q 46,132 52,105 Q 55,92 62,88" stroke="#1c1c1c" strokeWidth="22" strokeLinecap="round" fill="none"/>
-                {/* left hand */}
-                <ellipse cx="62" cy="84" rx="14" ry="13" fill="#181818"/>
-                {/* left index finger up */}
-                <ellipse cx="57" cy="72" rx="6" ry="11" fill="#141414"/>
-                <ellipse cx="57" cy="63" rx="5" ry="6" fill="#111"/>
-
-                {/* ── right arm raised to face ── */}
-                <path d="M 118,152 Q 134,132 128,105 Q 125,92 118,88" stroke="#1c1c1c" strokeWidth="22" strokeLinecap="round" fill="none"/>
-                {/* right hand */}
-                <ellipse cx="118" cy="84" rx="14" ry="13" fill="#181818"/>
-                {/* right index finger up */}
-                <ellipse cx="123" cy="72" rx="6" ry="11" fill="#141414"/>
-                <ellipse cx="123" cy="63" rx="5" ry="6" fill="#111"/>
-
-                {/* ── ears (behind head) ── */}
-                <circle cx="40" cy="80" r="19" fill="#181818"/>
-                <circle cx="40" cy="80" r="11" fill="#2e2e2e"/>
-                <circle cx="140" cy="80" r="19" fill="#181818"/>
-                <circle cx="140" cy="80" r="11" fill="#2e2e2e"/>
-
-                {/* ── head ── */}
-                <ellipse cx="90" cy="72" rx="50" ry="54" fill="#1a1a1a"/>
-
-                {/* ── face plate ── */}
-                <ellipse cx="90" cy="85" rx="36" ry="40" fill="#3a3a3a"/>
-
-                {/* ── brow ridge ── */}
-                <ellipse cx="90" cy="65" rx="34" ry="14" fill="#242424"/>
-
-                {/* ── sad inner brows ── */}
-                <path d="M 72,62 Q 80,56 88,60" stroke="#111" strokeWidth="3.5" strokeLinecap="round" fill="none"/>
-                <path d="M 108,62 Q 100,56 92,60" stroke="#111" strokeWidth="3.5" strokeLinecap="round" fill="none"/>
-
-                {/* ── eye whites ── */}
-                <ellipse cx="76" cy="76" rx="13" ry="12" fill="#ede9e2"/>
-                <ellipse cx="104" cy="76" rx="13" ry="12" fill="#ede9e2"/>
-
-                {/* ── pupils ── */}
-                <circle cx="76" cy="78" r="7" fill="#111"/>
-                <circle cx="104" cy="78" r="7" fill="#111"/>
-                {/* eye shine */}
-                <circle cx="73" cy="75" r="2.5" fill="#fff" opacity="0.75"/>
-                <circle cx="101" cy="75" r="2.5" fill="#fff" opacity="0.75"/>
-
-                {/* ── tears ── */}
-                {/* left tear drop */}
-                <path d="M 69,87 Q 66,96 69,104 Q 72,110 75,104 Q 78,96 75,87 Z" fill="#93c5fd" opacity="0.70"/>
-                {/* right tear drop */}
-                <path d="M 111,87 Q 114,96 111,104 Q 108,110 105,104 Q 102,96 105,87 Z" fill="#93c5fd" opacity="0.70"/>
-
-                {/* ── nose ── */}
-                <ellipse cx="83" cy="96" rx="6" ry="5" fill="#111" opacity="0.85"/>
-                <ellipse cx="97" cy="96" rx="6" ry="5" fill="#111" opacity="0.85"/>
-                <path d="M 83,96 Q 90,100 97,96" stroke="#111" strokeWidth="1.5" fill="none" opacity="0.7"/>
-
-                {/* ── sad mouth ── */}
-                <path d="M 78,110 Q 90,105 102,110" stroke="#111" strokeWidth="3" strokeLinecap="round" fill="none"/>
-              </svg>
-              <p className="text-[13px] text-kong-text-secondary">The catalog is empty — No bananas! :-)</p>
-            </div>
-          )}
         </div>
       )}
 

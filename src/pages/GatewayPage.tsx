@@ -4,10 +4,16 @@ import { useState } from 'react'
 import { useInterfaces, useMode } from '../contexts/ModeContext'
 import type { CatalogInterface, GatewayProductType } from '../types'
 import { NewServiceWizard } from '../components/NewServiceWizard'
+import { NewAiProxyWizard } from '../components/NewAiProxyWizard'
 
 const CREATION_MODE_CPS: Record<string, { instance: string; environment: string; cpType: string }> = {
   'meridian-prod-hybrid': { instance: 'meridian-prod-hybrid', environment: 'Production', cpType: 'Hybrid' },
   'serverless-demo': { instance: 'serverless-demo', environment: 'Development', cpType: 'Serverless' },
+}
+
+const CREATION_MODE_AI_CPS: Record<string, { instance: string; environment: string; cpType: string }> = {
+  'meridian-ai-prod': { instance: 'meridian-ai-prod', environment: 'Production', cpType: 'Hybrid' },
+  'meridian-ai-sandbox': { instance: 'meridian-ai-sandbox', environment: 'Development', cpType: 'Serverless' },
 }
 
 function gwMeta(gwType: string) {
@@ -29,8 +35,9 @@ function useControlPlaneGroups(gwType: string) {
   const groups = new Map<string, { instance: string; environment: string; cpType?: string; interfaces: CatalogInterface[] }>()
 
   // In creation mode, seed the known CPs so they appear even with no linked interfaces
-  if (mode === 'creation' && gwType === 'api') {
-    for (const [cpName, meta] of Object.entries(CREATION_MODE_CPS)) {
+  if (mode === 'creation') {
+    const seedCPs = gwType === 'ai' ? CREATION_MODE_AI_CPS : gwType === 'api' ? CREATION_MODE_CPS : {}
+    for (const [cpName, meta] of Object.entries(seedCPs)) {
       groups.set(cpName, { instance: meta.instance, environment: meta.environment, cpType: meta.cpType, interfaces: [] })
     }
   }
@@ -58,6 +65,7 @@ function GatewayLanding({ gwType }: { gwType: string }) {
   const { mode } = useMode()
   const [expandedCPs, setExpandedCPs] = useState<Set<string>>(() => new Set(groups.keys()))
   const [newServiceCP, setNewServiceCP] = useState<string | null>(null)
+  const [aiProxyOpen, setAiProxyOpen] = useState(false)
   const nav = useNavigate()
 
   const toggleCP = (cp: string) => {
@@ -96,6 +104,14 @@ function GatewayLanding({ gwType }: { gwType: string }) {
             className="px-4 py-2 text-sm font-semibold rounded-md bg-kong-cta text-[#0d1117] hover:brightness-110 transition"
           >
             + New Service
+          </button>
+        )}
+        {mode === 'creation' && gwType === 'ai' && (
+          <button
+            onClick={() => setAiProxyOpen(true)}
+            className="px-4 py-2 text-sm font-semibold rounded-md bg-kong-cta text-[#0d1117] hover:brightness-110 transition"
+          >
+            + New Proxy
           </button>
         )}
       </div>
@@ -162,17 +178,29 @@ function GatewayLanding({ gwType }: { gwType: string }) {
                           </button>
                         </div>
                         <div className="space-y-1">
-                          {gl.objects.map(obj => (
-                            <div key={obj.id} className="flex items-center justify-between px-3 py-2 bg-white/[0.02] rounded border border-kong-border-subtle">
-                              <div className="flex items-center gap-2">
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-white/[0.04] text-kong-text-secondary border border-kong-border-subtle">
-                                  {obj.type}
-                                </span>
-                                <span className="text-[12px] font-medium text-kong-text">{obj.name}</span>
+                          {gl.objects.map(obj => {
+                            const isPlugin = obj.type === 'Plugin'
+                            const isMcpPlugin = isPlugin && obj.name.startsWith('ai-mcp-proxy')
+                            const isAiProxy = isPlugin && (obj.name.startsWith('ai-proxy'))
+                            const pluginBadge = isMcpPlugin
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              : isAiProxy
+                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                              : isPlugin
+                              ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                              : 'bg-white/[0.04] text-kong-text-secondary border-kong-border-subtle'
+                            return (
+                              <div key={obj.id} className="flex items-center justify-between px-3 py-2 bg-white/[0.02] rounded border border-kong-border-subtle">
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${pluginBadge}`}>
+                                    {obj.type}
+                                  </span>
+                                  <span className="text-[12px] font-medium text-kong-text">{obj.name}</span>
+                                </div>
+                                <span className="text-[10px] text-kong-text-muted font-mono">{obj.id}</span>
                               </div>
-                              <span className="text-[10px] text-kong-text-muted font-mono">{obj.id}</span>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       </div>
                     )
@@ -190,6 +218,9 @@ function GatewayLanding({ gwType }: { gwType: string }) {
 
       {newServiceCP && (
         <NewServiceWizard cpNames={cpNames} onClose={() => setNewServiceCP(null)} />
+      )}
+      {aiProxyOpen && (
+        <NewAiProxyWizard cpNames={cpNames} onClose={() => setAiProxyOpen(false)} />
       )}
     </div>
   )
@@ -255,17 +286,29 @@ export function GatewayPage({ landingType }: { landingType?: GatewayProductType 
               {gwType === 'event' ? 'Event Gateway Objects' : gwType === 'ai' ? 'AI Gateway Objects' : 'Gateway Objects'}
             </h2>
             <div className="space-y-2">
-              {gl.objects.map(obj => (
-                <div key={obj.id} className="flex items-center justify-between px-4 py-3 bg-white/[0.02] rounded-lg border border-kong-border-subtle hover:border-kong-teal/20 transition-colors cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/[0.04] text-kong-text-secondary border border-kong-border-subtle">
-                      {obj.type}
-                    </span>
-                    <span className="text-[13px] font-medium text-kong-text">{obj.name}</span>
+              {gl.objects.map(obj => {
+                const isPlugin = obj.type === 'Plugin'
+                const isMcpPlugin = isPlugin && obj.name.startsWith('ai-mcp-proxy')
+                const isAiProxy = isPlugin && obj.name.startsWith('ai-proxy')
+                const pluginBadge = isMcpPlugin
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : isAiProxy
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  : isPlugin
+                  ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                  : 'bg-white/[0.04] text-kong-text-secondary border-kong-border-subtle'
+                return (
+                  <div key={obj.id} className="flex items-center justify-between px-4 py-3 bg-white/[0.02] rounded-lg border border-kong-border-subtle hover:border-kong-teal/20 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-medium border ${pluginBadge}`}>
+                        {obj.type}
+                      </span>
+                      <span className="text-[13px] font-medium text-kong-text">{obj.name}</span>
+                    </div>
+                    <span className="text-[11px] text-kong-text-muted font-mono">{obj.id}</span>
                   </div>
-                  <span className="text-[11px] text-kong-text-muted font-mono">{obj.id}</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 
