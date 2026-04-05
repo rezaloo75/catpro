@@ -55,13 +55,6 @@ A product owner publishes an API starting from the Dev Portal.
 
 ---
 
-## Flow 4 — Context Mesh
-
-1. Create an interface via any flow above (REST API wizard with Context Mesh toggled on, or enable it later via the Applications tab)
-2. Navigate to **Context Mesh** to see the interface registered in a mesh registry
-
----
-
 ## Surfaces visible in Creation mode
 
 | Surface | Role in Creation flows |
